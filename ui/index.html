@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Day 12 Agent — Deployment Console</title>
+  <style>
+    :root {
+      --canvas: #10120f;
+      --surface: #171a15;
+      --surface-raised: #1d211a;
+      --line: #373c31;
+      --line-strong: #555c49;
+      --text: #eeeade;
+      --muted: #aaa99d;
+      --accent: #d5a13b;
+      --accent-ink: #201806;
+      --success: #75b889;
+      --danger: #e1786f;
+      --info: #8ba8bc;
+      --focus: #f1bd53;
+      --radius: 6px;
+      --sans: Aptos, "Segoe UI", sans-serif;
+      --mono: "Cascadia Code", "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { background: var(--canvas); }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100dvh;
+      color: var(--text);
+      background-color: var(--canvas);
+      background-image:
+        linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+      background-size: 24px 24px;
+      font: 400 16px/1.55 var(--sans);
+    }
+
+    button, input, textarea { font: inherit; }
+    button { touch-action: manipulation; }
+
+    :focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 20;
+      padding: 10px 14px;
+      color: var(--accent-ink);
+      background: var(--accent);
+      transform: translateY(-150%);
+    }
+
+    .skip-link:focus { transform: translateY(0); }
+
+    .shell {
+      width: min(1240px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 48px;
+    }
+
+    .masthead {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 28px;
+      padding-bottom: 22px;
+      border-bottom: 1px solid var(--line-strong);
+      animation: enter .35s cubic-bezier(.2,.8,.2,1) both;
+    }
+
+    .eyebrow, .section-label, .method, .status-code {
+      font-family: var(--mono);
+      font-size: .76rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow { color: var(--accent); }
+
+    h1 {
+      max-width: 780px;
+      margin: 6px 0 8px;
+      font: 600 clamp(2rem, 8vw, 4.7rem)/.96 var(--mono);
+      letter-spacing: -.06em;
+      text-wrap: balance;
+    }
+
+    .lede {
+      max-width: 660px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 1.02rem;
+      text-wrap: pretty;
+    }
+
+    .system-mark {
+      align-self: end;
+      justify-self: start;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 44px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .83rem;
+    }
+
+    .pulse {
+      width: 10px;
+      height: 10px;
+      border: 2px solid var(--muted);
+      border-radius: 50%;
+    }
+
+    .workspace {
+      display: grid;
+      gap: 20px;
+      animation: enter .35s .07s cubic-bezier(.2,.8,.2,1) both;
+    }
+
+    .panel {
+      min-width: 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: inset 0 1px rgba(255,255,255,.035), 0 12px 32px rgba(4,7,3,.22);
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 52px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font: 600 .88rem/1 var(--mono);
+      letter-spacing: .03em;
+    }
+
+    .panel-body { padding: 18px; }
+
+    .stack { display: grid; gap: 16px; }
+
+    .field { display: grid; gap: 7px; }
+
+    label {
+      color: var(--muted);
+      font-size: .86rem;
+      font-weight: 600;
+    }
+
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: .79rem;
+    }
+
+    input, textarea {
+      width: 100%;
+      min-height: 48px;
+      color: var(--text);
+      background: #0d0f0c;
+      border: 1px solid var(--line-strong);
+      border-radius: 3px;
+      padding: 11px 12px;
+      font-size: 16px;
+    }
+
+    textarea {
+      min-height: 126px;
+      resize: vertical;
+    }
+
+    input::placeholder, textarea::placeholder { color: #74766e; }
+
+    .secret-wrap {
+      display: grid;
+      grid-template-columns: 1fr auto;
+    }
+
+    .secret-wrap input {
+      border-radius: 3px 0 0 3px;
+      border-right: 0;
+    }
+
+    .button {
+      min-height: 46px;
+      padding: 10px 15px;
+      color: var(--text);
+      background: var(--surface-raised);
+      border: 1px solid var(--line-strong);
+      border-radius: 3px;
+      font-weight: 650;
+      cursor: pointer;
+      transition: background .18s cubic-bezier(.2,.8,.2,1), border-color .18s, color .18s;
+    }
+
+    .button:hover { background: #292e24; border-color: #737b63; }
+    .button:active { background: #32382b; }
+    .button:disabled { cursor: wait; opacity: .5; }
+
+    .button-primary {
+      color: var(--accent-ink);
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .button-primary:hover { background: #e0b04f; border-color: #e0b04f; }
+
+    .button-quiet {
+      min-height: 44px;
+      color: var(--muted);
+      background: transparent;
+    }
+
+    .secret-wrap .button { border-radius: 0 3px 3px 0; }
+
+    .action-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .action-row .button-primary { grid-column: 1 / -1; }
+
+    .probe-grid {
+      display: grid;
+      gap: 1px;
+      background: var(--line);
+      border: 1px solid var(--line);
+    }
+
+    .probe {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 12px;
+      min-height: 74px;
+      padding: 14px;
+      background: var(--surface);
+    }
+
+    .probe-dot {
+      width: 13px;
+      height: 13px;
+      border: 2px solid var(--muted);
+      border-radius: 50%;
+    }
+
+    .probe[data-state="ok"] .probe-dot { background: var(--success); border-color: var(--success); }
+    .probe[data-state="bad"] .probe-dot { background: var(--danger); border-color: var(--danger); }
+    .probe[data-state="loading"] .probe-dot { border-color: var(--accent); animation: blink .8s alternate infinite; }
+
+    .probe-name { font-weight: 650; }
+    .probe-purpose { display: block; color: var(--muted); font-size: .78rem; }
+    .probe-state { color: var(--muted); font: 500 .76rem var(--mono); text-transform: uppercase; }
+
+    .console {
+      min-height: 520px;
+      background: #0b0d0a;
+    }
+
+    .empty-state {
+      display: grid;
+      place-items: center;
+      min-height: 430px;
+      padding: 40px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .empty-state p { max-width: 390px; margin: 0; }
+
+    .log-list {
+      display: grid;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .log-entry {
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+      animation: log-in .22s cubic-bezier(.2,.8,.2,1) both;
+    }
+
+    .log-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 12px;
+      margin-bottom: 12px;
+      font-family: var(--mono);
+      font-size: .76rem;
+    }
+
+    .method { color: var(--accent); }
+    .path { color: var(--text); overflow-wrap: anywhere; }
+    .duration, .timestamp { color: var(--muted); }
+    .status-code.ok { color: var(--success); }
+    .status-code.bad { color: var(--danger); }
+    .status-code.neutral { color: var(--info); }
+
+    pre {
+      max-height: 330px;
+      margin: 0;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: #d7d8ce;
+      font: 400 .82rem/1.65 var(--mono);
+    }
+
+    .notice {
+      margin: 0;
+      padding: 12px 14px;
+      color: #d9c89c;
+      background: #262111;
+      border-left: 3px solid var(--accent);
+      font-size: .84rem;
+    }
+
+    @media (min-width: 720px) {
+      .masthead { grid-template-columns: 1fr auto; }
+      .probe-grid { grid-template-columns: 1fr 1fr; }
+      .action-row { grid-template-columns: 1fr 1fr 1.3fr; }
+      .action-row .button-primary { grid-column: auto; }
+    }
+
+    @media (min-width: 960px) {
+      .shell { padding-top: 46px; }
+      .workspace { grid-template-columns: minmax(300px, .78fr) minmax(520px, 1.35fr); align-items: start; }
+      .controls { position: sticky; top: 20px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+    }
+
+    @keyframes enter { from { opacity: 0; transform: translateY(10px); } }
+    @keyframes log-in { from { opacity: 0; transform: translateY(-5px); } }
+    @keyframes blink { to { background: var(--accent); } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#console">Skip to response log</a>
+
+  <div class="shell">
+    <header class="masthead">
+      <div>
+        <div class="eyebrow">DAY12 / deployment instrument</div>
+        <h1>Agent service console</h1>
+        <p class="lede">Probe process health, confirm Redis readiness, and exercise the protected agent endpoint from one browser tab.</p>
+      </div>
+      <div class="system-mark" id="systemMark">
+        <span class="pulse" aria-hidden="true"></span>
+        <span id="systemText">Awaiting probe</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="controls stack" aria-label="API controls">
+        <div class="panel">
+          <div class="panel-head"><h2>Connection</h2><span class="section-label">config</span></div>
+          <div class="panel-body stack">
+            <div class="field">
+              <label for="baseUrl">Service URL</label>
+              <input id="baseUrl" type="url" inputmode="url" autocomplete="url" spellcheck="false">
+              <p class="hint">Leave this at the current origin when the console is served by FastAPI.</p>
+            </div>
+            <div class="field">
+              <label for="apiKey">API key</label>
+              <div class="secret-wrap">
+                <input id="apiKey" type="password" autocomplete="off" placeholder="Required for /ask">
+                <button class="button button-quiet" id="toggleKey" type="button" aria-controls="apiKey" aria-pressed="false">Show</button>
+              </div>
+              <p class="hint">Kept in page memory only. It is never written to the event log.</p>
+            </div>
+            <div class="field">
+              <label for="userId">User ID</label>
+              <input id="userId" value="sv-test" maxlength="80" autocomplete="off">
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Service probes</h2><button class="button button-quiet" id="runProbes" type="button">Run both</button></div>
+          <div class="probe-grid">
+            <div class="probe" id="healthProbe" data-state="idle">
+              <span class="probe-dot" aria-hidden="true"></span>
+              <span><span class="probe-name">Liveness</span><span class="probe-purpose">Process responds</span></span>
+              <span class="probe-state">idle</span>
+            </div>
+            <div class="probe" id="readyProbe" data-state="idle">
+              <span class="probe-dot" aria-hidden="true"></span>
+              <span><span class="probe-name">Readiness</span><span class="probe-purpose">Redis responds</span></span>
+              <span class="probe-state">idle</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Ask the agent</h2><span class="section-label">POST /ask</span></div>
+          <form class="panel-body stack" id="askForm">
+            <div class="field">
+              <label for="question">Question</label>
+              <textarea id="question" required minlength="1" maxlength="2000" placeholder="Why should a readiness probe check Redis?"></textarea>
+              <p class="hint">Press Ctrl/⌘ + Enter to send.</p>
+            </div>
+            <div class="action-row">
+              <button class="button" id="unauthorizedTest" type="button">Test 401</button>
+              <button class="button" id="burstTest" type="button">Run burst ×15</button>
+              <button class="button button-primary" id="sendQuestion" type="submit">Send request</button>
+            </div>
+            <p class="notice">The burst test consumes this user’s current rate-limit window. Wait 60 seconds before sending more requests.</p>
+          </form>
+        </div>
+      </section>
+
+      <section class="panel" id="console" aria-labelledby="consoleTitle">
+        <div class="panel-head">
+          <h2 id="consoleTitle">Response log</h2>
+          <button class="button button-quiet" id="clearLog" type="button">Clear log</button>
+        </div>
+        <div class="console" aria-live="polite" aria-atomic="false">
+          <div class="empty-state" id="emptyState"><p>No requests yet. Run both probes to check the process and its Redis connection.</p></div>
+          <ol class="log-list" id="logList"></ol>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const elements = {
+      baseUrl: document.querySelector('#baseUrl'),
+      apiKey: document.querySelector('#apiKey'),
+      userId: document.querySelector('#userId'),
+      question: document.querySelector('#question'),
+      askForm: document.querySelector('#askForm'),
+      toggleKey: document.querySelector('#toggleKey'),
+      runProbes: document.querySelector('#runProbes'),
+      unauthorizedTest: document.querySelector('#unauthorizedTest'),
+      burstTest: document.querySelector('#burstTest'),
+      sendQuestion: document.querySelector('#sendQuestion'),
+      clearLog: document.querySelector('#clearLog'),
+      logList: document.querySelector('#logList'),
+      emptyState: document.querySelector('#emptyState'),
+      systemText: document.querySelector('#systemText'),
+      healthProbe: document.querySelector('#healthProbe'),
+      readyProbe: document.querySelector('#readyProbe')
+    };
+
+    elements.baseUrl.value = location.protocol === 'file:' ? 'http://localhost:8000' : location.origin;
+
+    function normalizedBase() {
+      return elements.baseUrl.value.trim().replace(/\/+$/, '');
+    }
+
+    function authHeaders(includeKey = true) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (includeKey) headers['X-API-Key'] = elements.apiKey.value;
+      if (elements.userId.value.trim()) headers['X-User-Id'] = elements.userId.value.trim();
+      return headers;
+    }
+
+    function formatBody(body) {
+      return typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+    }
+
+    function setBusy(button, busy, label) {
+      if (!button.dataset.label) button.dataset.label = button.textContent;
+      button.disabled = busy;
+      button.textContent = busy ? label : button.dataset.label;
+    }
+
+    function updateProbe(probe, state, label) {
+      probe.dataset.state = state;
+      probe.querySelector('.probe-state').textContent = label;
+    }
+
+    function statusTone(status) {
+      if (status >= 200 && status < 300) return 'ok';
+      if (status >= 400) return 'bad';
+      return 'neutral';
+    }
+
+    function addLog({ method, path, status, duration, body }) {
+      elements.emptyState.hidden = true;
+      const entry = document.createElement('li');
+      entry.className = 'log-entry';
+
+      const meta = document.createElement('div');
+      meta.className = 'log-meta';
+      const values = [
+        ['method', method],
+        ['path', path],
+        [`status-code ${statusTone(status)}`, String(status)],
+        ['duration', `${Math.round(duration)} ms`],
+        ['timestamp', new Date().toLocaleTimeString()]
+      ];
+      values.forEach(([className, value]) => {
+        const span = document.createElement('span');
+        span.className = className;
+        span.textContent = value;
+        meta.appendChild(span);
+      });
+
+      const output = document.createElement('pre');
+      output.textContent = formatBody(body);
+      entry.append(meta, output);
+      elements.logList.prepend(entry);
+    }
+
+    async function request(path, options = {}) {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 15000);
+      const started = performance.now();
+      const method = options.method || 'GET';
+      try {
+        const response = await fetch(`${normalizedBase()}${path}`, { ...options, signal: controller.signal });
+        const raw = await response.text();
+        let body = raw;
+        try { body = raw ? JSON.parse(raw) : {}; } catch (_) { /* Plain text response. */ }
+        const result = { method, path, status: response.status, duration: performance.now() - started, body };
+        addLog(result);
+        return result;
+      } catch (error) {
+        const message = error.name === 'AbortError'
+          ? 'Request timed out after 15 seconds. Check the service URL and Railway status.'
+          : `Connection failed: ${error.message}. Check the URL and whether the service allows this origin.`;
+        const result = { method, path, status: 0, duration: performance.now() - started, body: { error: message } };
+        addLog(result);
+        return result;
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    }
+
+    async function runProbe(path, probe) {
+      updateProbe(probe, 'loading', 'checking');
+      const result = await request(path);
+      const healthy = result.status === 200;
+      updateProbe(probe, healthy ? 'ok' : 'bad', healthy ? 'online' : `HTTP ${result.status || 'ERR'}`);
+      return healthy;
+    }
+
+    elements.toggleKey.addEventListener('click', () => {
+      const showing = elements.apiKey.type === 'text';
+      elements.apiKey.type = showing ? 'password' : 'text';
+      elements.toggleKey.textContent = showing ? 'Show' : 'Hide';
+      elements.toggleKey.setAttribute('aria-pressed', String(!showing));
+    });
+
+    elements.runProbes.addEventListener('click', async () => {
+      setBusy(elements.runProbes, true, 'Checking…');
+      const [health, ready] = await Promise.all([
+        runProbe('/health', elements.healthProbe),
+        runProbe('/ready', elements.readyProbe)
+      ]);
+      elements.systemText.textContent = health && ready ? 'Service ready' : health ? 'Process up / dependency down' : 'Service unavailable';
+      setBusy(elements.runProbes, false);
+    });
+
+    elements.askForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!elements.askForm.reportValidity()) return;
+      setBusy(elements.sendQuestion, true, 'Sending…');
+      await request('/ask', {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({ question: elements.question.value.trim() })
+      });
+      setBusy(elements.sendQuestion, false);
+    });
+
+    elements.question.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        elements.askForm.requestSubmit();
+      }
+    });
+
+    elements.unauthorizedTest.addEventListener('click', async () => {
+      setBusy(elements.unauthorizedTest, true, 'Testing…');
+      await request('/ask', {
+        method: 'POST',
+        headers: authHeaders(false),
+        body: JSON.stringify({ question: 'Authentication check' })
+      });
+      setBusy(elements.unauthorizedTest, false);
+    });
+
+    elements.burstTest.addEventListener('click', async () => {
+      setBusy(elements.burstTest, true, 'Running 0/15');
+      const counts = { successful: 0, limited: 0, failed: 0 };
+      const started = performance.now();
+      for (let index = 1; index <= 15; index += 1) {
+        elements.burstTest.textContent = `Running ${index}/15`;
+        const result = await request('/ask', {
+          method: 'POST',
+          headers: authHeaders(true),
+          body: JSON.stringify({ question: `Rate limit probe ${index}` })
+        });
+        if (result.status === 200) counts.successful += 1;
+        else if (result.status === 429) counts.limited += 1;
+        else counts.failed += 1;
+      }
+      addLog({ method: 'RUN', path: '/ask ×15 summary', status: counts.limited ? 429 : 200, duration: performance.now() - started, body: counts });
+      setBusy(elements.burstTest, false);
+    });
+
+    elements.clearLog.addEventListener('click', () => {
+      elements.logList.replaceChildren();
+      elements.emptyState.hidden = false;
+    });
+  </script>
+</body>
+</html>
